@@ -1,0 +1,27 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# PyInstaller
+*.spec
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+
+# Ignore Streamlit cache and config files
+.streamlit/
+
+# Ignore environment variables and secrets
+.env
+secrets.toml
