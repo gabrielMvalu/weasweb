@@ -5,6 +5,10 @@ from io import BytesIO
 from docx import Document
 from PIL import Image
 
+# Access secrets (username and password from Streamlit Secrets)
+USERNAME = st.secrets["credentials"]["USERNAME"]
+PASSWORD = st.secrets["credentials"]["PASSWORD"]
+
 # Function to extract text from PDF
 def extract_text_from_pdf(file):
     with pdfplumber.open(file) as pdf:
@@ -42,39 +46,53 @@ def populate_word_template(extracted_data):
 # Streamlit App
 st.title("CV Restructuring Tool")
 
-# Display the logo in the sidebar
-logo = Image.open("logo.png")
-st.sidebar.image(logo, use_column_width=True)
+# Sidebar for login
+st.sidebar.title("Login")
+input_username = st.sidebar.text_input("Username")
+input_password = st.sidebar.text_input("Password", type="password")
 
-# Sidebar for file upload
-st.sidebar.header("Upload CV")
-uploaded_cv = st.sidebar.file_uploader("Upload your CV in PDF or Word format", type=["pdf", "docx"])
+# Authentication logic
+if st.sidebar.button("Login"):
+    if input_username == USERNAME and input_password == PASSWORD:
+        st.success("Logged in successfully!")
 
-if uploaded_cv is not None:
-    if uploaded_cv.type == "application/pdf":
-        st.write("Processing PDF...")
-        cv_text = extract_text_from_pdf(uploaded_cv)
-    elif uploaded_cv.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        st.write("Processing Word Document...")
-        cv_text = extract_text_from_docx(uploaded_cv)
-    
-    # Mock extracted data for now (you can expand this part to do actual extraction)
-    extracted_data = {
-        "name": "John Doe",
-        "contact_info": "johndoe@example.com",
-        "experience": "3 years at XYZ Corp",
-        "skills": "Python, Machine Learning"
-    }
+        # Display the logo in the sidebar
+        logo = Image.open("logo.png")
+        st.sidebar.image(logo, use_column_width=True)
 
-    # Populate the Word template with the extracted data
-    restructured_cv = populate_word_template(extracted_data)
+        # Sidebar for file upload
+        st.sidebar.header("Upload CV")
+        uploaded_cv = st.sidebar.file_uploader("Upload your CV in PDF or Word format", type=["pdf", "docx"])
 
-    # Download button for the restructured CV
-    st.download_button(
-        label="Download Restructured CV",
-        data=restructured_cv,
-        file_name="restructured_cv.docx",
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
-else:
-    st.sidebar.info("Please upload a CV to process.")
+        if uploaded_cv is not None:
+            if uploaded_cv.type == "application/pdf":
+                st.write("Processing PDF...")
+                cv_text = extract_text_from_pdf(uploaded_cv)
+            elif uploaded_cv.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                st.write("Processing Word Document...")
+                cv_text = extract_text_from_docx(uploaded_cv)
+            
+            # Mock extracted data for now (you can expand this part to do actual extraction)
+            extracted_data = {
+                "name": "John Doe",
+                "contact_info": "johndoe@example.com",
+                "experience": "3 years at XYZ Corp",
+                "skills": "Python, Machine Learning"
+            }
+
+            # Populate the Word template with the extracted data
+            restructured_cv = populate_word_template(extracted_data)
+
+            # Download button for the restructured CV
+            st.download_button(
+                label="Download Restructured CV",
+                data=restructured_cv,
+                file_name="restructured_cv.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+        else:
+            st.sidebar.info("Please upload a CV to process.")
+
+    else:
+        st.error("Invalid username or password.")
+
