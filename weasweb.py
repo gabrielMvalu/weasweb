@@ -25,22 +25,21 @@ def extract_text_from_docx(file):
 
 # Function to get structured data from OpenAI
 def get_structured_data_from_openai(cv_text, api_key):
-    import openai
     openai.api_key = api_key
 
-    # Definește schema JSON pe care dorești ca modelul să o respecte
+    # Define the JSON schema
     function_schema = {
         "name": "extract_cv_info",
-        "description": "Extrage informații dintr-un CV și le structurează în format JSON.",
+        "description": "Extracts information from a CV and structures it in JSON format.",
         "parameters": {
             "type": "object",
             "properties": {
                 "contact_details": {
                     "type": "object",
                     "properties": {
-                        "name": {"type": "string", "description": "Numele complet al candidatului"},
-                        "email": {"type": "string", "description": "Adresa de email"},
-                        "phone": {"type": "string", "description": "Numărul de telefon"}
+                        "name": {"type": "string", "description": "Candidate's full name"},
+                        "email": {"type": "string", "description": "Email address"},
+                        "phone": {"type": "string", "description": "Phone number"}
                     },
                     "required": ["name"]
                 },
@@ -49,10 +48,10 @@ def get_structured_data_from_openai(cv_text, api_key):
                     "items": {
                         "type": "object",
                         "properties": {
-                            "position": {"type": "string", "description": "Titlul poziției"},
-                            "company": {"type": "string", "description": "Numele companiei"},
-                            "start_date": {"type": "string", "description": "Data de început"},
-                            "end_date": {"type": "string", "description": "Data de finalizare"}
+                            "position": {"type": "string", "description": "Job title"},
+                            "company": {"type": "string", "description": "Company name"},
+                            "start_date": {"type": "string", "description": "Start date"},
+                            "end_date": {"type": "string", "description": "End date"}
                         },
                         "required": ["position", "company", "start_date"]
                     }
@@ -62,10 +61,10 @@ def get_structured_data_from_openai(cv_text, api_key):
                     "items": {
                         "type": "object",
                         "properties": {
-                            "institution": {"type": "string", "description": "Numele instituției"},
-                            "degree": {"type": "string", "description": "Titlul obținut"},
-                            "start_date": {"type": "string", "description": "Data de început"},
-                            "end_date": {"type": "string", "description": "Data de finalizare"}
+                            "institution": {"type": "string", "description": "Institution name"},
+                            "degree": {"type": "string", "description": "Degree earned"},
+                            "start_date": {"type": "string", "description": "Start date"},
+                            "end_date": {"type": "string", "description": "End date"}
                         },
                         "required": ["institution", "degree", "start_date"]
                     }
@@ -79,33 +78,34 @@ def get_structured_data_from_openai(cv_text, api_key):
         }
     }
 
-    # Construiește mesajele pentru model
+    # Build the messages
     messages = [
-        {"role": "system", "content": "Ești un asistent care extrage informații din CV-uri și le structurează conform unei scheme JSON specificate."},
-        {"role": "user", "content": f"Te rog să extragi informațiile din următorul CV și să le returnezi conform schemei specificate.\n\nCV:\n{cv_text}"}
+        {"role": "system", "content": "You are an assistant that extracts information from CVs and structures it according to a specified JSON schema."},
+        {"role": "user", "content": f"Please extract the information from the following CV and return it according to the specified schema.\n\nCV:\n{cv_text}"}
     ]
 
-    # Apelează API-ul OpenAI cu parametrul strict: True
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-2023-10-06",  # Asigură-te că ai acces la acest model
-        messages=messages,
-        functions=[function_schema],
-        function_call={"name": "extract_cv_info"},
-        strict=True,  # Activează Structured Outputs
-        max_tokens=1500,
-        temperature=0
-    )
+    try:
+        response = openai.Chat.create(
+            model="gpt-4-0613",  # Ensure you have access to this model
+            messages=messages,
+            functions=[function_schema],
+            function_call={"name": "extract_cv_info"},
+            strict=True,  # Enable Structured Outputs
+            max_tokens=1500,
+            temperature=0
+        )
 
-    # Verifică dacă modelul a returnat un apel de funcție
-    message = response["choices"][0]["message"]
+        # Process the response
+        message = response["message"]
 
-    if message.get("function_call"):
-        # Extrage argumentele funcției returnate de model
-        extracted_data = json.loads(message["function_call"]["arguments"])
-        return extracted_data
-    else:
-        raise ValueError("Modelul nu a returnat date structurate conform schemei.")
+        if "function_call" in message:
+            extracted_data = json.loads(message["function_call"]["arguments"])
+            return extracted_data
+        else:
+            raise ValueError("The model did not return structured data according to the schema.")
 
+    except openai.exceptions.OpenAIError as e:
+        raise Exception(f"An error occurred while accessing OpenAI: {str(e)}")
 
 # Function to populate a Word template with extracted data
 def populate_word_template(extracted_data):
@@ -117,9 +117,31 @@ def populate_word_template(extracted_data):
         if '{{name}}' in paragraph.text:
             paragraph.text = paragraph.text.replace('{{name}}', extracted_data['contact_details']['name'])
         if '{{contact_info}}' in paragraph.text:
-            contact_info = f"Email: {extracted_data['contact_details']['email']}, Phone: {extracted_data['contact_details']['phone']}"
+            email = extracted_data['contact_details'].get('email', '')
+            phone = extracted_data['contact_details'].get('phone', '')
+            contact_info = f"Email: {email}, Phone: {phone}"
             paragraph.text = paragraph.text.replace('{{contact_info}}', contact_info)
-        # Add similar logic for experience, education, and skills
+        if '{{experience}}' in paragraph.text:
+            experience_text = ''
+            for exp in extracted_data.get('experience', []):
+                position = exp.get('position', '')
+                company = exp.get('company', '')
+                start_date = exp.get('start_date', '')
+                end_date = exp.get('end_date', 'Present')
+                experience_text += f"{position} at {company} ({start_date} - {end_date})\n"
+            paragraph.text = paragraph.text.replace('{{experience}}', experience_text)
+        if '{{education}}' in paragraph.text:
+            education_text = ''
+            for edu in extracted_data.get('education', []):
+                degree = edu.get('degree', '')
+                institution = edu.get('institution', '')
+                start_date = edu.get('start_date', '')
+                end_date = edu.get('end_date', 'Present')
+                education_text += f"{degree} at {institution} ({start_date} - {end_date})\n"
+            paragraph.text = paragraph.text.replace('{{education}}', education_text)
+        if '{{skills}}' in paragraph.text:
+            skills_text = ', '.join(extracted_data.get('skills', []))
+            paragraph.text = paragraph.text.replace('{{skills}}', skills_text)
 
     # Save the document to a BytesIO object for download
     output = BytesIO()
@@ -151,7 +173,7 @@ with st.sidebar:
 
     if st.session_state.authenticated:
         # Input for OpenAI API key from user
-        openai_api_key = st.text_input("Introduceți cheia de acces OpenAI", type="password")
+        openai_api_key = st.text_input("Enter your OpenAI API key", type="password")
 
         # Logout button
         if st.button("Logout"):
@@ -160,11 +182,14 @@ with st.sidebar:
 # Only proceed if the user is authenticated and has provided the OpenAI API key
 if st.session_state.authenticated:
     if not openai_api_key:
-        st.info("Vă rugăm să introduceți cheia de acces OpenAI în bara laterală.")
+        st.info("Please enter your OpenAI API key in the sidebar.")
     else:
         # Display the logo in the sidebar
-        logo = Image.open("logo.png")
-        st.sidebar.image(logo, use_column_width=True)
+        try:
+            logo = Image.open("logo.png")
+            st.sidebar.image(logo, use_column_width=True)
+        except Exception:
+            st.sidebar.write("Logo not found.")
 
         # Sidebar for file upload
         st.sidebar.header("Upload CV")
@@ -180,10 +205,7 @@ if st.session_state.authenticated:
 
             # Get structured data from OpenAI
             try:
-                structured_data = get_structured_data_from_openai(cv_text, openai_api_key)
-
-                # Convert the JSON response to a Python dictionary
-                extracted_data = json.loads(structured_data)
+                extracted_data = get_structured_data_from_openai(cv_text, openai_api_key)
 
                 # Populate the Word template with the extracted data
                 restructured_cv = populate_word_template(extracted_data)
@@ -195,10 +217,11 @@ if st.session_state.authenticated:
                     file_name="restructured_cv.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 )
-            except openai.error.OpenAIError as e:
-                st.error(f"A apărut o eroare la accesarea OpenAI: {str(e)}")
+            except openai.exceptions.OpenAIError as e:
+                st.error(f"An error occurred while accessing OpenAI: {str(e)}")
+            except Exception as e:
+                st.error(f"An error occurred: {str(e)}")
 
         else:
             st.sidebar.info("Please upload a CV to process.")
-
 
