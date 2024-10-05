@@ -64,8 +64,9 @@ st.title("CV Restructuring Tool")
 # Initialize session state for authentication
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
+
 if "openai_api_key" not in st.session_state:
-    st.session_state.openai_api_key = None
+    st.session_state.openai_api_key = ""
 
 # Sidebar for login and OpenAI API key
 with st.sidebar:
@@ -84,12 +85,15 @@ with st.sidebar:
 
     if st.session_state.authenticated:
         # Input for OpenAI API key from user
-        st.session_state.openai_api_key = st.text_input("Introduceți cheia de acces OpenAI", type="password", key="openai_api_key")
+        openai_api_key = st.text_input("Introduceți cheia de acces OpenAI", type="password", key="openai_api_key")
+        
+        if openai_api_key:
+            st.session_state.openai_api_key = openai_api_key
 
         # Logout button
         if st.button("Logout"):
             st.session_state.authenticated = False
-            st.session_state.openai_api_key = None
+            st.session_state.openai_api_key = ""
 
 if st.session_state.authenticated:
     if not st.session_state.openai_api_key:
@@ -133,3 +137,4 @@ if st.session_state.authenticated:
 
         else:
             st.sidebar.info("Please upload a CV to process.")
+
