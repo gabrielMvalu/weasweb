@@ -25,18 +25,87 @@ def extract_text_from_docx(file):
 
 # Function to get structured data from OpenAI
 def get_structured_data_from_openai(cv_text, api_key):
+    import openai
     openai.api_key = api_key
-    prompt = f"""
-    Extrage informațiile relevante din următorul CV și structurează-le în formatul JSON:
-    {cv_text}
-    """
-    response = openai.Completion.create(
-        engine="text-davinci-003",
-        prompt=prompt,
+
+    # Definește schema JSON pe care dorești ca modelul să o respecte
+    function_schema = {
+        "name": "extract_cv_info",
+        "description": "Extrage informații dintr-un CV și le structurează în format JSON.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "contact_details": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Numele complet al candidatului"},
+                        "email": {"type": "string", "description": "Adresa de email"},
+                        "phone": {"type": "string", "description": "Numărul de telefon"}
+                    },
+                    "required": ["name"]
+                },
+                "experience": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "position": {"type": "string", "description": "Titlul poziției"},
+                            "company": {"type": "string", "description": "Numele companiei"},
+                            "start_date": {"type": "string", "description": "Data de început"},
+                            "end_date": {"type": "string", "description": "Data de finalizare"}
+                        },
+                        "required": ["position", "company", "start_date"]
+                    }
+                },
+                "education": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "institution": {"type": "string", "description": "Numele instituției"},
+                            "degree": {"type": "string", "description": "Titlul obținut"},
+                            "start_date": {"type": "string", "description": "Data de început"},
+                            "end_date": {"type": "string", "description": "Data de finalizare"}
+                        },
+                        "required": ["institution", "degree", "start_date"]
+                    }
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": ["contact_details"]
+        }
+    }
+
+    # Construiește mesajele pentru model
+    messages = [
+        {"role": "system", "content": "Ești un asistent care extrage informații din CV-uri și le structurează conform unei scheme JSON specificate."},
+        {"role": "user", "content": f"Te rog să extragi informațiile din următorul CV și să le returnezi conform schemei specificate.\n\nCV:\n{cv_text}"}
+    ]
+
+    # Apelează API-ul OpenAI cu parametrul strict: True
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-2023-10-06",  # Asigură-te că ai acces la acest model
+        messages=messages,
+        functions=[function_schema],
+        function_call={"name": "extract_cv_info"},
+        strict=True,  # Activează Structured Outputs
         max_tokens=1500,
-        temperature=0.5
+        temperature=0
     )
-    return response.choices[0].text.strip()
+
+    # Verifică dacă modelul a returnat un apel de funcție
+    message = response["choices"][0]["message"]
+
+    if message.get("function_call"):
+        # Extrage argumentele funcției returnate de model
+        extracted_data = json.loads(message["function_call"]["arguments"])
+        return extracted_data
+    else:
+        raise ValueError("Modelul nu a returnat date structurate conform schemei.")
+
 
 # Function to populate a Word template with extracted data
 def populate_word_template(extracted_data):
