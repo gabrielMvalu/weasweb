@@ -46,53 +46,61 @@ def populate_word_template(extracted_data):
 # Streamlit App
 st.title("CV Restructuring Tool")
 
+# Initialize session state for authentication
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
 # Sidebar for login
-st.sidebar.title("Login")
-input_username = st.sidebar.text_input("Username")
-input_password = st.sidebar.text_input("Password", type="password")
+if not st.session_state.authenticated:
+    st.sidebar.title("Login")
+    input_username = st.sidebar.text_input("Username")
+    input_password = st.sidebar.text_input("Password", type="password")
 
-# Authentication logic
-if st.sidebar.button("Login"):
-    if input_username == USERNAME and input_password == PASSWORD:
-        st.success("Logged in successfully!")
-
-        # Display the logo in the sidebar
-        logo = Image.open("logo.png")
-        st.sidebar.image(logo, use_column_width=True)
-
-        # Sidebar for file upload
-        st.sidebar.header("Upload CV")
-        uploaded_cv = st.sidebar.file_uploader("Upload your CV in PDF or Word format", type=["pdf", "docx"])
-
-        if uploaded_cv is not None:
-            if uploaded_cv.type == "application/pdf":
-                st.write("Processing PDF...")
-                cv_text = extract_text_from_pdf(uploaded_cv)
-            elif uploaded_cv.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                st.write("Processing Word Document...")
-                cv_text = extract_text_from_docx(uploaded_cv)
-            
-            # Mock extracted data for now (you can expand this part to do actual extraction)
-            extracted_data = {
-                "name": "John Doe",
-                "contact_info": "johndoe@example.com",
-                "experience": "3 years at XYZ Corp",
-                "skills": "Python, Machine Learning"
-            }
-
-            # Populate the Word template with the extracted data
-            restructured_cv = populate_word_template(extracted_data)
-
-            # Download button for the restructured CV
-            st.download_button(
-                label="Download Restructured CV",
-                data=restructured_cv,
-                file_name="restructured_cv.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
+    if st.sidebar.button("Login"):
+        if input_username == USERNAME and input_password == PASSWORD:
+            st.session_state.authenticated = True
+            st.success("Logged in successfully!")
         else:
-            st.sidebar.info("Please upload a CV to process.")
+            st.error("Invalid username or password.")
+else:
+    # Display the logo in the sidebar
+    logo = Image.open("logo.png")
+    st.sidebar.image(logo, use_column_width=True)
 
+    # Sidebar for file upload
+    st.sidebar.header("Upload CV")
+    uploaded_cv = st.sidebar.file_uploader("Upload your CV in PDF or Word format", type=["pdf", "docx"])
+
+    if uploaded_cv is not None:
+        if uploaded_cv.type == "application/pdf":
+            st.write("Processing PDF...")
+            cv_text = extract_text_from_pdf(uploaded_cv)
+        elif uploaded_cv.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            st.write("Processing Word Document...")
+            cv_text = extract_text_from_docx(uploaded_cv)
+
+        # Mock extracted data for now (you can expand this part to do actual extraction)
+        extracted_data = {
+            "name": "John Doe",
+            "contact_info": "johndoe@example.com",
+            "experience": "3 years at XYZ Corp",
+            "skills": "Python, Machine Learning"
+        }
+
+        # Populate the Word template with the extracted data
+        restructured_cv = populate_word_template(extracted_data)
+
+        # Download button for the restructured CV
+        st.download_button(
+            label="Download Restructured CV",
+            data=restructured_cv,
+            file_name="restructured_cv.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
     else:
-        st.error("Invalid username or password.")
+        st.sidebar.info("Please upload a CV to process.")
+
+    # Logout button
+    if st.sidebar.button("Logout"):
+        st.session_state.authenticated = False
 
