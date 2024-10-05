@@ -3,11 +3,17 @@ import pdfplumber
 import docx
 from io import BytesIO
 from docx import Document
+import openai
 from PIL import Image
 
-# Access secrets (username and password from Streamlit Secrets)
+# Access secrets
 USERNAME = st.secrets["credentials"]["USERNAME"]
 PASSWORD = st.secrets["credentials"]["PASSWORD"]
+OPENAI_API_KEY = st.secrets["credentials"]["OPENAI_API_KEY"]
+
+
+# Set OpenAI API key
+openai.api_key = OPENAI_API_KEY
 
 # Function to extract text from PDF
 def extract_text_from_pdf(file):
@@ -21,9 +27,44 @@ def extract_text_from_docx(file):
     fullText = [para.text for para in doc.paragraphs]
     return '\n'.join(fullText)
 
+# Function to get structured data from OpenAI
+def get_structured_data_from_openai(cv_text):
+    prompt = f"""
+    Extract the relevant information from the following CV and structure it in the following JSON format:
+    {{
+        "name": "Nume Candidat",
+        "contact_info": "Info Contact",
+        "experience": [
+            {{
+                "position": "Titlul Jobului",
+                "company": "Compania",
+                "duration": "Durata",
+                "description": "Descriere"
+            }}
+        ],
+        "education": [
+            {{
+                "degree": "Titlul Diplomei",
+                "institution": "Instituția",
+                "year": "Anul"
+            }}
+        ],
+        "skills": ["Skill 1", "Skill 2"]
+    }}
+    CV:
+    {cv_text}
+    """
+    response = openai.Completion.create(
+        engine="text-davinci-003",
+        prompt=prompt,
+        max_tokens=500,
+        temperature=0.5
+    )
+    return response.choices[0].text.strip()
+
 # Function to populate a Word template with extracted data
 def populate_word_template(extracted_data):
-    template_path = "cv_template.docx"  # This should point to your template
+    template_path = "cv_template.docx"
     doc = Document(template_path)
 
     # Replace placeholders in the Word template
@@ -32,10 +73,7 @@ def populate_word_template(extracted_data):
             paragraph.text = paragraph.text.replace('{{name}}', extracted_data['name'])
         if '{{contact_info}}' in paragraph.text:
             paragraph.text = paragraph.text.replace('{{contact_info}}', extracted_data['contact_info'])
-        if '{{experience}}' in paragraph.text:
-            paragraph.text = paragraph.text.replace('{{experience}}', extracted_data['experience'])
-        if '{{skills}}' in paragraph.text:
-            paragraph.text = paragraph.text.replace('{{skills}}', extracted_data['skills'])
+        # Add similar logic for experience, education, and skills
 
     # Save the document to a BytesIO object for download
     output = BytesIO()
@@ -79,13 +117,12 @@ else:
             st.write("Processing Word Document...")
             cv_text = extract_text_from_docx(uploaded_cv)
 
-        # Mock extracted data for now (you can expand this part to do actual extraction)
-        extracted_data = {
-            "name": "John Doe",
-            "contact_info": "johndoe@example.com",
-            "experience": "3 years at XYZ Corp",
-            "skills": "Python, Machine Learning"
-        }
+        # Get structured data from OpenAI
+        structured_data = get_structured_data_from_openai(cv_text)
+
+        # Convert the JSON response to a Python dictionary
+        import json
+        extracted_data = json.loads(structured_data)
 
         # Populate the Word template with the extracted data
         restructured_cv = populate_word_template(extracted_data)
@@ -103,4 +140,5 @@ else:
     # Logout button
     if st.sidebar.button("Logout"):
         st.session_state.authenticated = False
+
 
