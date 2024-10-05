@@ -64,21 +64,33 @@ if "authenticated" not in st.session_state:
 # Sidebar for login and OpenAI API key
 with st.sidebar:
     st.title("Login")
-    input_username = st.text_input("Username")
-    input_password = st.text_input("Password", type="password")
+    if not st.session_state.authenticated:
+        input_username = st.text_input("Username", key="username")
+        input_password = st.text_input("Password", type="password", key="password")
 
-    if st.button("Login"):
-        if input_username == "your_username_here" and input_password == "your_password_here":
-            st.session_state.authenticated = True
-            st.success("Logged in successfully!")
-        else:
-            st.error("Invalid username or password.")
+        # Debugging: Display the values introduced
+        st.write(f"Username introdus: {input_username}")
+        st.write(f"Parola introdusă: {input_password}")
 
-    openai_api_key = st.text_input("Access Key", key="chatbot_api_key", type="password")
+        if st.button("Login"):
+            # Replace these credentials with your actual credentials
+            if input_username == "matasaru.madalin" and input_password == "1234matasaru":
+                st.session_state.authenticated = True
+                st.success("Logged in successfully!")
+            else:
+                st.error("Invalid username or password.")
+
+    if st.session_state.authenticated:
+        # Input for OpenAI API key
+        openai_api_key = st.text_input("OpenAI Access Key", type="password", key="openai_api_key")
+        
+        # Logout button
+        if st.button("Logout"):
+            st.session_state.authenticated = False
 
 if st.session_state.authenticated:
     if not openai_api_key:
-        st.info("Vă rugăm să introduceți cheia de acces în bara laterală.")
+        st.info("Vă rugăm să introduceți cheia de acces OpenAI în bara laterală.")
     else:
         # Display the logo in the sidebar
         logo = Image.open("logo.png")
@@ -119,6 +131,3 @@ if st.session_state.authenticated:
         else:
             st.sidebar.info("Please upload a CV to process.")
 
-    # Logout button
-    if st.sidebar.button("Logout"):
-        st.session_state.authenticated = False
