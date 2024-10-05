@@ -7,14 +7,6 @@ import openai
 import json
 from PIL import Image
 
-# Access secrets
-USERNAME = st.secrets["credentials"]["USERNAME"]
-PASSWORD = st.secrets["credentials"]["PASSWORD"]
-OPENAI_API_KEY = st.secrets["credentials"]["OPENAI_API_KEY"]
-
-# Set OpenAI API key
-openai.api_key = OPENAI_API_KEY
-
 # Function to extract text from PDF
 def extract_text_from_pdf(file):
     with pdfplumber.open(file) as pdf:
@@ -28,7 +20,8 @@ def extract_text_from_docx(file):
     return '\n'.join(fullText)
 
 # Function to get structured data from OpenAI
-def get_structured_data_from_openai(cv_text):
+def get_structured_data_from_openai(cv_text, api_key):
+    openai.api_key = api_key
     prompt = f"""
     Extrage informațiile relevante din următorul CV și structurează-le în formatul JSON:
     {cv_text}
@@ -68,57 +61,64 @@ st.title("CV Restructuring Tool")
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-# Sidebar for login
-if not st.session_state.authenticated:
-    st.sidebar.title("Login")
-    input_username = st.sidebar.text_input("Username")
-    input_password = st.sidebar.text_input("Password", type="password")
+# Sidebar for login and OpenAI API key
+with st.sidebar:
+    st.title("Login")
+    input_username = st.text_input("Username")
+    input_password = st.text_input("Password", type="password")
 
-    if st.sidebar.button("Login"):
-        if input_username == USERNAME and input_password == PASSWORD:
+    if st.button("Login"):
+        if input_username == "your_username_here" and input_password == "your_password_here":
             st.session_state.authenticated = True
             st.success("Logged in successfully!")
         else:
             st.error("Invalid username or password.")
-else:
-    # Display the logo in the sidebar
-    logo = Image.open("logo.png")
-    st.sidebar.image(logo, use_column_width=True)
 
-    # Sidebar for file upload
-    st.sidebar.header("Upload CV")
-    uploaded_cv = st.sidebar.file_uploader("Upload your CV in PDF or Word format", type=["pdf", "docx"])
+    openai_api_key = st.text_input("Access Key", key="chatbot_api_key", type="password")
 
-    if uploaded_cv is not None:
-        if uploaded_cv.type == "application/pdf":
-            st.write("Processing PDF...")
-            cv_text = extract_text_from_pdf(uploaded_cv)
-        elif uploaded_cv.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            st.write("Processing Word Document...")
-            cv_text = extract_text_from_docx(uploaded_cv)
-
-        # Get structured data from OpenAI
-        structured_data = get_structured_data_from_openai(cv_text)
-
-        # Convert the JSON response to a Python dictionary
-        extracted_data = json.loads(structured_data)
-
-        # Populate the Word template with the extracted data
-        restructured_cv = populate_word_template(extracted_data)
-
-        # Download button for the restructured CV
-        st.download_button(
-            label="Download Restructured CV",
-            data=restructured_cv,
-            file_name="restructured_cv.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
+if st.session_state.authenticated:
+    if not openai_api_key:
+        st.info("Vă rugăm să introduceți cheia de acces în bara laterală.")
     else:
-        st.sidebar.info("Please upload a CV to process.")
+        # Display the logo in the sidebar
+        logo = Image.open("logo.png")
+        st.sidebar.image(logo, use_column_width=True)
+
+        # Sidebar for file upload
+        st.sidebar.header("Upload CV")
+        uploaded_cv = st.sidebar.file_uploader("Upload your CV in PDF or Word format", type=["pdf", "docx"])
+
+        if uploaded_cv is not None:
+            if uploaded_cv.type == "application/pdf":
+                st.write("Processing PDF...")
+                cv_text = extract_text_from_pdf(uploaded_cv)
+            elif uploaded_cv.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                st.write("Processing Word Document...")
+                cv_text = extract_text_from_docx(uploaded_cv)
+
+            # Get structured data from OpenAI
+            try:
+                structured_data = get_structured_data_from_openai(cv_text, openai_api_key)
+
+                # Convert the JSON response to a Python dictionary
+                extracted_data = json.loads(structured_data)
+
+                # Populate the Word template with the extracted data
+                restructured_cv = populate_word_template(extracted_data)
+
+                # Download button for the restructured CV
+                st.download_button(
+                    label="Download Restructured CV",
+                    data=restructured_cv,
+                    file_name="restructured_cv.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+            except openai.error.OpenAIError as e:
+                st.error(f"A apărut o eroare la accesarea OpenAI: {str(e)}")
+
+        else:
+            st.sidebar.info("Please upload a CV to process.")
 
     # Logout button
     if st.sidebar.button("Logout"):
         st.session_state.authenticated = False
-
-
-
