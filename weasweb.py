@@ -85,7 +85,7 @@ def get_structured_data_from_openai(cv_text, api_key):
     ]
 
     try:
-        response = openai.Chat.create(
+        response = openai.chat_complete(
             model="gpt-4-0613",  # Ensure you have access to this model
             messages=messages,
             functions=[function_schema],
@@ -104,7 +104,7 @@ def get_structured_data_from_openai(cv_text, api_key):
         else:
             raise ValueError("The model did not return structured data according to the schema.")
 
-    except openai.exceptions.OpenAIError as e:
+    except openai.error.OpenAIError as e:
         raise Exception(f"An error occurred while accessing OpenAI: {str(e)}")
 
 # Function to populate a Word template with extracted data
@@ -217,11 +217,10 @@ if st.session_state.authenticated:
                     file_name="restructured_cv.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 )
-            except openai.exceptions.OpenAIError as e:
+            except openai.error.OpenAIError as e:
                 st.error(f"An error occurred while accessing OpenAI: {str(e)}")
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
 
         else:
             st.sidebar.info("Please upload a CV to process.")
-
