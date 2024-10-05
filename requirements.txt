@@ -2,4 +2,4 @@ streamlit
 pdfplumber
 python-docx
 Pillow
-openai
+openai==0.28
