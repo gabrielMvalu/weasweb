@@ -85,7 +85,7 @@ def get_structured_data_from_openai(cv_text, api_key):
     ]
 
     try:
-        response = openai.chat_complete(
+        response = openai.ChatCompletion.create(
             model="gpt-4-0613",  # Ensure you have access to this model
             messages=messages,
             functions=[function_schema],
@@ -96,7 +96,7 @@ def get_structured_data_from_openai(cv_text, api_key):
         )
 
         # Process the response
-        message = response["message"]
+        message = response["choices"][0]["message"]
 
         if "function_call" in message:
             extracted_data = json.loads(message["function_call"]["arguments"])
@@ -224,3 +224,4 @@ if st.session_state.authenticated:
 
         else:
             st.sidebar.info("Please upload a CV to process.")
+
