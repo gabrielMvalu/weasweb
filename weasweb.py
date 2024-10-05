@@ -4,15 +4,16 @@ import docx
 from io import BytesIO
 from docx import Document
 import openai
+import json
 from PIL import Image
 
 # Access secrets
 USERNAME = st.secrets["credentials"]["USERNAME"]
 PASSWORD = st.secrets["credentials"]["PASSWORD"]
+OPENAI_API_KEY = st.secrets["credentials"]["OPENAI_API_KEY"]
 
-with st.sidebar:
-    openai_api_key = st.text_input("Acces Key", key="chatbot_api_key", type="password")
-
+# Set OpenAI API key
+openai.api_key = OPENAI_API_KEY
 
 # Function to extract text from PDF
 def extract_text_from_pdf(file):
@@ -29,34 +30,13 @@ def extract_text_from_docx(file):
 # Function to get structured data from OpenAI
 def get_structured_data_from_openai(cv_text):
     prompt = f"""
-    Extract the relevant information from the following CV and structure it in the following JSON format:
-    {{
-        "name": "Nume Candidat",
-        "contact_info": "Info Contact",
-        "experience": [
-            {{
-                "position": "Titlul Jobului",
-                "company": "Compania",
-                "duration": "Durata",
-                "description": "Descriere"
-            }}
-        ],
-        "education": [
-            {{
-                "degree": "Titlul Diplomei",
-                "institution": "Instituția",
-                "year": "Anul"
-            }}
-        ],
-        "skills": ["Skill 1", "Skill 2"]
-    }}
-    CV:
+    Extrage informațiile relevante din următorul CV și structurează-le în formatul JSON:
     {cv_text}
     """
     response = openai.Completion.create(
         engine="text-davinci-003",
         prompt=prompt,
-        max_tokens=500,
+        max_tokens=1500,
         temperature=0.5
     )
     return response.choices[0].text.strip()
@@ -69,9 +49,10 @@ def populate_word_template(extracted_data):
     # Replace placeholders in the Word template
     for paragraph in doc.paragraphs:
         if '{{name}}' in paragraph.text:
-            paragraph.text = paragraph.text.replace('{{name}}', extracted_data['name'])
+            paragraph.text = paragraph.text.replace('{{name}}', extracted_data['contact_details']['name'])
         if '{{contact_info}}' in paragraph.text:
-            paragraph.text = paragraph.text.replace('{{contact_info}}', extracted_data['contact_info'])
+            contact_info = f"Email: {extracted_data['contact_details']['email']}, Phone: {extracted_data['contact_details']['phone']}"
+            paragraph.text = paragraph.text.replace('{{contact_info}}', contact_info)
         # Add similar logic for experience, education, and skills
 
     # Save the document to a BytesIO object for download
@@ -120,7 +101,6 @@ else:
         structured_data = get_structured_data_from_openai(cv_text)
 
         # Convert the JSON response to a Python dictionary
-        import json
         extracted_data = json.loads(structured_data)
 
         # Populate the Word template with the extracted data
@@ -139,5 +119,6 @@ else:
     # Logout button
     if st.sidebar.button("Logout"):
         st.session_state.authenticated = False
+
 
 
