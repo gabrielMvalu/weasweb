@@ -65,9 +65,6 @@ st.title("CV Restructuring Tool")
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-if "openai_api_key" not in st.session_state:
-    st.session_state.openai_api_key = ""
-
 # Sidebar for login and OpenAI API key
 with st.sidebar:
     st.title("Login")
@@ -85,18 +82,15 @@ with st.sidebar:
 
     if st.session_state.authenticated:
         # Input for OpenAI API key from user
-        openai_api_key = st.text_input("Introduceți cheia de acces OpenAI", type="password", key="openai_api_key")
-        
-        if openai_api_key:
-            st.session_state.openai_api_key = openai_api_key
+        openai_api_key = st.text_input("Introduceți cheia de acces OpenAI", type="password")
 
         # Logout button
         if st.button("Logout"):
             st.session_state.authenticated = False
-            st.session_state.openai_api_key = ""
 
+# Only proceed if the user is authenticated and has provided the OpenAI API key
 if st.session_state.authenticated:
-    if not st.session_state.openai_api_key:
+    if not openai_api_key:
         st.info("Vă rugăm să introduceți cheia de acces OpenAI în bara laterală.")
     else:
         # Display the logo in the sidebar
@@ -117,7 +111,7 @@ if st.session_state.authenticated:
 
             # Get structured data from OpenAI
             try:
-                structured_data = get_structured_data_from_openai(cv_text, st.session_state.openai_api_key)
+                structured_data = get_structured_data_from_openai(cv_text, openai_api_key)
 
                 # Convert the JSON response to a Python dictionary
                 extracted_data = json.loads(structured_data)
@@ -137,4 +131,5 @@ if st.session_state.authenticated:
 
         else:
             st.sidebar.info("Please upload a CV to process.")
+
 
