@@ -224,3 +224,4 @@ if st.session_state.authenticated:
 
         else:
             st.sidebar.info("Please upload a CV to process.")
+
