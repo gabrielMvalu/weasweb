@@ -9,11 +9,10 @@ from PIL import Image
 # Access secrets
 USERNAME = st.secrets["credentials"]["USERNAME"]
 PASSWORD = st.secrets["credentials"]["PASSWORD"]
-OPENAI_API_KEY = st.secrets["credentials"]["OPENAI_API_KEY"]
 
+with st.sidebar:
+    openai_api_key = st.text_input("Acces Key", key="chatbot_api_key", type="password")
 
-# Set OpenAI API key
-openai.api_key = OPENAI_API_KEY
 
 # Function to extract text from PDF
 def extract_text_from_pdf(file):
