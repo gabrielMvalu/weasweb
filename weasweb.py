@@ -35,7 +35,8 @@ def extract_text_from_pdf(file):
     text = ""
     with pdfplumber.open(file) as pdf:
         for page in pdf.pages:
-            text += page.extract_text() + "\n"
+            if page.extract_text():
+                text += page.extract_text() + "\n"
     return text
 
 # Functie pentru a extrage textul din Word
@@ -66,6 +67,11 @@ if uploaded_files and job_description:
             cv_text = extract_text_from_word(uploaded_file)
         else:
             st.warning(f"Formatul fisierului {uploaded_file.name} nu este suportat.")
+            continue
+
+        # Verifica daca textul a fost extras cu succes
+        if not cv_text.strip():
+            st.warning(f"Nu s-a putut extrage textul din {uploaded_file.name}. Verificati fisierul.")
             continue
 
         # Creare embedding pentru textul extras
