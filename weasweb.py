@@ -1,227 +1,108 @@
 import streamlit as st
+import openai
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.decomposition import PCA
 import pdfplumber
 import docx
-from io import BytesIO
-from docx import Document
-import openai
-import json
-from PIL import Image
+from pymongo import MongoClient
 
-# Access secrets (username and password from Streamlit Secrets)
-USERNAME = st.secrets["credentials"]["USERNAME"]
-PASSWORD = st.secrets["credentials"]["PASSWORD"]
+# Configurare initiala OpenAI
+openai.api_key = "YOUR_OPENAI_API_KEY"
 
-# Function to extract text from PDF
+# Configurare initiala MongoDB Atlas
+client = MongoClient("YOUR_MONGODB_ATLAS_CONNECTION_STRING")
+db = client['cv_matching_db']
+candidates_collection = db['candidates']
+matches_collection = db['matches']
+
+# Functie pentru a crea embedding-uri si a reduce dimensionalitatea folosind OpenAI
+@st.cache_data
+def create_and_reduce_embedding(text, n_components=50):
+    response = openai.Embedding.create(
+        input=text,
+        model="text-embedding-ada-002"
+    )
+    embedding = response['data'][0]['embedding']
+    pca = PCA(n_components=min(n_components, len(embedding)))
+    reduced_embedding = pca.fit_transform(np.array(embedding).reshape(1, -1))
+    return reduced_embedding.flatten()
+
+# Functie pentru a extrage textul din PDF
 def extract_text_from_pdf(file):
+    text = ""
     with pdfplumber.open(file) as pdf:
-        pages = [page.extract_text() for page in pdf.pages]
-    return "\n".join(pages)
+        for page in pdf.pages:
+            text += page.extract_text() + "\n"
+    return text
 
-# Function to extract text from Word
-def extract_text_from_docx(file):
+# Functie pentru a extrage textul din Word
+def extract_text_from_word(file):
     doc = docx.Document(file)
-    fullText = [para.text for para in doc.paragraphs]
-    return '\n'.join(fullText)
+    text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+    return text
 
-# Function to get structured data from OpenAI
-def get_structured_data_from_openai(cv_text, api_key):
-    openai.api_key = api_key
+# Streamlit UI
+st.title("CV Matching Tool")
 
-    # Define the JSON schema
-    function_schema = {
-        "name": "extract_cv_info",
-        "description": "Extracts information from a CV and structures it in JSON format.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "contact_details": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string", "description": "Candidate's full name"},
-                        "email": {"type": "string", "description": "Email address"},
-                        "phone": {"type": "string", "description": "Phone number"}
-                    },
-                    "required": ["name"]
-                },
-                "experience": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "position": {"type": "string", "description": "Job title"},
-                            "company": {"type": "string", "description": "Company name"},
-                            "start_date": {"type": "string", "description": "Start date"},
-                            "end_date": {"type": "string", "description": "End date"}
-                        },
-                        "required": ["position", "company", "start_date"]
-                    }
-                },
-                "education": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "institution": {"type": "string", "description": "Institution name"},
-                            "degree": {"type": "string", "description": "Degree earned"},
-                            "start_date": {"type": "string", "description": "Start date"},
-                            "end_date": {"type": "string", "description": "End date"}
-                        },
-                        "required": ["institution", "degree", "start_date"]
-                    }
-                },
-                "skills": {
-                    "type": "array",
-                    "items": {"type": "string"}
-                }
-            },
-            "required": ["contact_details"]
-        }
-    }
+# Sectiune pentru incarcare CV-uri
+uploaded_files = st.file_uploader("Incarca CV-uri (PDF sau Word)", accept_multiple_files=True)
+job_description = st.text_area("Descriere job")
 
-    # Build the messages
-    messages = [
-        {"role": "system", "content": "You are an assistant that extracts information from CVs and structures it according to a specified JSON schema."},
-        {"role": "user", "content": f"Please extract the information from the following CV and return it according to the specified schema.\n\nCV:\n{cv_text}"}
-    ]
+# Lista pentru stocarea embedding-urilor CV-urilor
+candidates = []
 
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4-0613",  # Ensure you have access to this model
-            messages=messages,
-            functions=[function_schema],
-            function_call={"name": "extract_cv_info"},
-            strict=True,  # Enable Structured Outputs
-            max_tokens=1500,
-            temperature=0
-        )
+if uploaded_files and job_description:
+    # Procesarea descrierii jobului
+    job_embedding = create_and_reduce_embedding(job_description)
 
-        # Process the response
-        message = response["choices"][0]["message"]
-
-        if "function_call" in message:
-            extracted_data = json.loads(message["function_call"]["arguments"])
-            return extracted_data
+    for uploaded_file in uploaded_files:
+        # Extrage textul din CV
+        if uploaded_file.type == "application/pdf":
+            cv_text = extract_text_from_pdf(uploaded_file)
+        elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            cv_text = extract_text_from_word(uploaded_file)
         else:
-            raise ValueError("The model did not return structured data according to the schema.")
+            st.warning(f"Formatul fisierului {uploaded_file.name} nu este suportat.")
+            continue
 
-    except openai.OpenAIError as e:
-        raise Exception(f"An error occurred while accessing OpenAI: {str(e)}")
+        # Creare embedding pentru textul extras
+        cv_embedding = create_and_reduce_embedding(cv_text)
 
-# Function to populate a Word template with extracted data
-def populate_word_template(extracted_data):
-    template_path = "cv_template.docx"
-    doc = Document(template_path)
+        # Stocheaza embedding-ul in MongoDB Atlas
+        candidates_collection.insert_one({'name': uploaded_file.name, 'embedding': cv_embedding.tolist()})
+        
+        # Adauga la lista pentru vizualizare
+        candidates.append({'name': uploaded_file.name, 'embedding': cv_embedding})
 
-    # Replace placeholders in the Word template
-    for paragraph in doc.paragraphs:
-        if '{{name}}' in paragraph.text:
-            paragraph.text = paragraph.text.replace('{{name}}', extracted_data['contact_details']['name'])
-        if '{{contact_info}}' in paragraph.text:
-            email = extracted_data['contact_details'].get('email', '')
-            phone = extracted_data['contact_details'].get('phone', '')
-            contact_info = f"Email: {email}, Phone: {phone}"
-            paragraph.text = paragraph.text.replace('{{contact_info}}', contact_info)
-        if '{{experience}}' in paragraph.text:
-            experience_text = ''
-            for exp in extracted_data.get('experience', []):
-                position = exp.get('position', '')
-                company = exp.get('company', '')
-                start_date = exp.get('start_date', '')
-                end_date = exp.get('end_date', 'Present')
-                experience_text += f"{position} at {company} ({start_date} - {end_date})\n"
-            paragraph.text = paragraph.text.replace('{{experience}}', experience_text)
-        if '{{education}}' in paragraph.text:
-            education_text = ''
-            for edu in extracted_data.get('education', []):
-                degree = edu.get('degree', '')
-                institution = edu.get('institution', '')
-                start_date = edu.get('start_date', '')
-                end_date = edu.get('end_date', 'Present')
-                education_text += f"{degree} at {institution} ({start_date} - {end_date})\n"
-            paragraph.text = paragraph.text.replace('{{education}}', education_text)
-        if '{{skills}}' in paragraph.text:
-            skills_text = ', '.join(extracted_data.get('skills', []))
-            paragraph.text = paragraph.text.replace('{{skills}}', skills_text)
+    # Calcularea similaritatii cosine dintre descrierea jobului si embedding-urile CV-urilor
+    embeddings = np.array([candidate['embedding'] for candidate in candidates])
+    job_embedding = np.array(job_embedding).reshape(1, -1)
+    similarities = cosine_similarity(job_embedding, embeddings).flatten()
 
-    # Save the document to a BytesIO object for download
-    output = BytesIO()
-    doc.save(output)
-    output.seek(0)
-    return output
+    # Creare DataFrame pentru a organiza datele
+    df = pd.DataFrame({'Candidate': [candidate['name'] for candidate in candidates], 'Similarity': similarities})
+    df = df.sort_values(by='Similarity', ascending=False)
 
-# Streamlit App
-st.title("CV Restructuring Tool")
+    # Afisare tabel si heatmap
+    st.write("### Rezultate potrivire")
+    st.dataframe(df)
 
-# Initialize session state for authentication
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+    # Generare heatmap pentru vizualizare
+    st.write("### Heatmap Similaritate")
+    fig, ax = plt.subplots()
+    cax = ax.imshow(similarities.reshape(1, -1), cmap='hot', aspect='auto')
+    ax.set_xticks(range(len(candidates)))
+    ax.set_xticklabels(df['Candidate'], rotation=90, fontsize=8)
+    ax.set_xlabel("Candidates")
+    ax.set_ylabel("Similarity Score")
+    fig.colorbar(cax, ax=ax)
+    st.pyplot(fig)
 
-# Sidebar for login and OpenAI API key
-with st.sidebar:
-    st.title("Login")
-    if not st.session_state.authenticated:
-        input_username = st.text_input("Username", key="username")
-        input_password = st.text_input("Password", type="password", key="password")
-
-        if st.button("Login"):
-            # Using credentials from st.secrets for authentication
-            if input_username == USERNAME and input_password == PASSWORD:
-                st.session_state.authenticated = True
-                st.success("Logged in successfully!")
-            else:
-                st.error("Invalid username or password.")
-
-    if st.session_state.authenticated:
-        # Input for OpenAI API key from user
-        openai_api_key = st.text_input("Enter your OpenAI API key", type="password")
-
-        # Logout button
-        if st.button("Logout"):
-            st.session_state.authenticated = False
-
-# Only proceed if the user is authenticated and has provided the OpenAI API key
-if st.session_state.authenticated:
-    if not openai_api_key:
-        st.info("Please enter your OpenAI API key in the sidebar.")
-    else:
-        # Display the logo in the sidebar
-        try:
-            logo = Image.open("logo.png")
-            st.sidebar.image(logo, use_column_width=True)
-        except Exception:
-            st.sidebar.write("Logo not found.")
-
-        # Sidebar for file upload
-        st.sidebar.header("Upload CV")
-        uploaded_cv = st.sidebar.file_uploader("Upload your CV in PDF or Word format", type=["pdf", "docx"])
-
-        if uploaded_cv is not None:
-            if uploaded_cv.type == "application/pdf":
-                st.write("Processing PDF...")
-                cv_text = extract_text_from_pdf(uploaded_cv)
-            elif uploaded_cv.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                st.write("Processing Word Document...")
-                cv_text = extract_text_from_docx(uploaded_cv)
-
-            # Get structured data from OpenAI
-            try:
-                extracted_data = get_structured_data_from_openai(cv_text, openai_api_key)
-
-                # Populate the Word template with the extracted data
-                restructured_cv = populate_word_template(extracted_data)
-
-                # Download button for the restructured CV
-                st.download_button(
-                    label="Download Restructured CV",
-                    data=restructured_cv,
-                    file_name="restructured_cv.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-            except openai.OpenAIError as e:
-                st.error(f"An error occurred while accessing OpenAI: {str(e)}")
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
-
-        else:
-            st.sidebar.info("Please upload a CV to process.")
-
+    # Buton pentru a salva informatiile in MongoDB Atlas
+    if st.button("Salveaza informatiile in MongoDB Atlas"):
+        for index, row in df.iterrows():
+            matches_collection.insert_one({'job_description': job_description, 'candidate_name': row['Candidate'], 'similarity': row['Similarity']})
+        st.success("Informatiile au fost salvate in MongoDB Atlas.")
