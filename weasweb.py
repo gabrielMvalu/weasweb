@@ -22,7 +22,7 @@ matches_collection = db['matches']
 @st.cache_data
 def create_and_reduce_embedding(text, n_components=50):
     response = openai.Embedding.create(
-        input=text,
+        input=[text],
         model="text-embedding-ada-002"
     )
     embedding = response['data'][0]['embedding']
