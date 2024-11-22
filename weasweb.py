@@ -94,7 +94,7 @@ def create_or_update_vector_store(documents, existing_store=None):
         name=INDEX_NAME,
         dimension=len(vectors[0]),
         metric='euclidean',
-        spec=pinecone.ServerlessSpec(cloud='aws', region='us-west-2')
+        spec=pinecone.ServerlessSpec(cloud='aws', region='us-east-1')
     )
     
     index = pc_client.Index(INDEX_NAME)
