@@ -7,8 +7,6 @@ import tempfile
 import os
 import pandas as pd
 import plotly.figure_factory as ff
-import numpy as np
-import shutil
 import json
 
 # Configurare Streamlit
@@ -22,7 +20,9 @@ INDEX_NAME = "cv-matching-index"
 PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
 if PINECONE_API_KEY:
     pinecone.init(api_key=PINECONE_API_KEY, environment="us-west1-gcp")
+    pc_client = pinecone.Client()
 else:
+    st.error("PINECONE_API_KEY nu este setat în secrets!")
     pc_client = None
 
 # Functie pentru incarcarea metadata
@@ -75,7 +75,7 @@ def create_or_update_vector_store(documents, existing_store=None):
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
-        separators=["\n\n", "\n", " ", ""]  # Corectat separatorii
+        separators=["\n\n", "\n", " ", ""]
     )
     texts = text_splitter.split_documents(documents)
     
@@ -84,9 +84,10 @@ def create_or_update_vector_store(documents, existing_store=None):
         return None
         
     embeddings = OpenAIEmbeddings()
+    # Corectat aici - folosim page_content în loc de content
     vectors = [embeddings.embed_documents([text.page_content])[0] for text in texts]
     
-    if INDEX_NAME not in pc_client.list_indexes():
+    if pc_client is not None and INDEX_NAME not in pc_client.list_indexes():
         pc_client.create_index(INDEX_NAME, dimension=len(vectors[0]))
     
     index = pc_client.Index(INDEX_NAME)
@@ -136,7 +137,7 @@ def main():
         
         # Optiuni pentru resetare si backup
         if st.button("❌ Șterge toate datele"):
-            if INDEX_NAME in pc_client.list_indexes():
+            if pc_client and INDEX_NAME in pc_client.list_indexes():
                 pc_client.delete_index(INDEX_NAME)
             if os.path.exists(METADATA_PATH):
                 os.remove(METADATA_PATH)
