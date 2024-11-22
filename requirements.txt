@@ -6,3 +6,4 @@ numpy
 plotly
 shutilwhich 
 pypdf
+faiss-cpu==1.7.3
