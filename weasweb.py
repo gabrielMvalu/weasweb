@@ -230,8 +230,8 @@ def main():
                 
                 with col2:
                     fig = ff.create_annotated_heatmap(
-                        z=[results_df['Score'].values],
-                        x=results_df['CV'].values,
+                        z=[results_df['Score'].values.tolist()],
+                        x=results_df['CV'].values.tolist(),
                         y=['Match'],
                         colorscale='RdYlGn',
                         showscale=True
