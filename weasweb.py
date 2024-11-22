@@ -76,10 +76,7 @@ def create_or_update_vector_store(documents, existing_store=None):
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
-        separators=["
-
-", "
-", " ", ""]
+        separators=["\n\n", "\n", " ", ""]  # Corectat separatorii
     )
     texts = text_splitter.split_documents(documents)
     
@@ -88,7 +85,6 @@ def create_or_update_vector_store(documents, existing_store=None):
         return None
         
     embeddings = OpenAIEmbeddings()
-    # Corectat aici - folosim page_content în loc de content
     vectors = [embeddings.embed_documents([text.page_content])[0] for text in texts]
     
     if INDEX_NAME not in pc_client.list_indexes():
