@@ -22,6 +22,7 @@ INDEX_NAME = "cv-matching-index"
 PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
 if PINECONE_API_KEY:
     pinecone.init(api_key=PINECONE_API_KEY, environment="us-west1-gcp")
+    pc_client = pinecone
 
 # Functie pentru incarcarea metadata
 def load_metadata():
@@ -37,8 +38,8 @@ def save_metadata(metadata):
 
 # Initializare variabile sesiune
 if 'vector_store' not in st.session_state:
-    if INDEX_NAME in pinecone.list_indexes():
-        st.session_state.vector_store = pinecone.Index(INDEX_NAME)
+    if INDEX_NAME in pc_client.list_indexes():
+        st.session_state.vector_store = pc_client.Index(INDEX_NAME)
         metadata = load_metadata()
         st.session_state.processed_cvs = metadata['processed_cvs']
     else:
@@ -79,10 +80,10 @@ def create_or_update_vector_store(documents, existing_store=None):
     embeddings = OpenAIEmbeddings()
     vectors = [embeddings.embed_text(text.content) for text in texts]
     
-    if INDEX_NAME not in pinecone.list_indexes():
-        pinecone.create_index(INDEX_NAME, dimension=len(vectors[0]))
+    if INDEX_NAME not in pc_client.list_indexes():
+        pc_client.create_index(INDEX_NAME, dimension=len(vectors[0]))
     
-    index = pinecone.Index(INDEX_NAME)
+    index = pc_client.Index(INDEX_NAME)
     
     for i, (text, vector) in enumerate(zip(texts, vectors)):
         metadata = {"source": text.metadata["source"]}
@@ -122,8 +123,8 @@ def main():
         
         # Optiuni pentru resetare si backup
         if st.button("❌ Șterge toate datele"):
-            if INDEX_NAME in pinecone.list_indexes():
-                pinecone.delete_index(INDEX_NAME)
+            if INDEX_NAME in pc_client.list_indexes():
+                pc_client.delete_index(INDEX_NAME)
             if os.path.exists(METADATA_PATH):
                 os.remove(METADATA_PATH)
             st.session_state.vector_store = None
