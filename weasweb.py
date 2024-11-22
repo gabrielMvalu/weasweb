@@ -20,11 +20,10 @@ INDEX_NAME = "cv-matching-index"
 PINECONE_API_KEY = st.text_input("Pinecone API Key", type="password")
 if PINECONE_API_KEY:
     os.environ['PINECONE_API_KEY'] = PINECONE_API_KEY
-if PINECONE_API_KEY:
-    pinecone_client = pinecone.Pinecone(api_key=PINECONE_API_KEY)
-    pc_client = pinecone_client
+    pinecone.init(api_key=PINECONE_API_KEY, environment="us-east-1")
+    pc_client = pinecone
 else:
-    st.error("PINECONE_API_KEY nu este setat în secrets!")
+    st.error("PINECONE_API_KEY nu este setat!")
     pc_client = None
 
 # Functie pentru incarcarea metadata
@@ -41,7 +40,7 @@ def save_metadata(metadata):
 
 # Initializare variabile sesiune
 if 'vector_store' not in st.session_state:
-    if pc_client and INDEX_NAME in pc_client.list_indexes().names():
+    if pc_client and INDEX_NAME in pc_client.list_indexes():
         st.session_state.vector_store = pc_client.Index(INDEX_NAME)
         metadata = load_metadata()
         st.session_state.processed_cvs = metadata['processed_cvs']
@@ -89,13 +88,18 @@ def create_or_update_vector_store(documents, existing_store=None):
     # Corectat aici - folosim page_content în loc de content
     vectors = [embeddings.embed_documents([text.page_content])[0] for text in texts]
     
-    if pc_client is not None and INDEX_NAME not in pc_client.list_indexes():
-        pc_client.create_index(
-        name=INDEX_NAME,
-        dimension=len(vectors[0]),
-        metric='euclidean',
-        spec=pinecone.ServerlessSpec(cloud='aws', region='us-east-1')
-    )
+    if pc_client is not None:
+        if INDEX_NAME not in pc_client.list_indexes():
+            try:
+                pc_client.create_index(
+                    name=INDEX_NAME,
+                    dimension=len(vectors[0]),
+                    metric='euclidean',
+                    spec=pinecone.ServerlessSpec(cloud='aws', region='us-east-1')
+                )
+            except pinecone.PineconeApiException as e:
+                if e.status != 409:  # Index already exists
+                    raise e
     
     index = pc_client.Index(INDEX_NAME)
     
@@ -145,7 +149,7 @@ def main():
         
         # Optiuni pentru resetare si backup
         if st.button("❌ Șterge toate datele"):
-            if pc_client and INDEX_NAME in pc_client.list_indexes():
+            if pc_client and INDEX_NAME in pc_client.list_indexes().names():
                 pc_client.delete_index(INDEX_NAME)
             if os.path.exists(METADATA_PATH):
                 os.remove(METADATA_PATH)
@@ -239,14 +243,6 @@ def main():
                         yaxis_title='Nivel Potrivire'
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                
-                csv = results_df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Descarcă Rezultate CSV",
-                    data=csv,
-                    file_name="rezultate_potrivire.csv",
-                    mime="text/csv"
-                )
     
     with tab3:
         st.header("Management Date")
