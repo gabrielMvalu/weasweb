@@ -17,7 +17,7 @@ METADATA_PATH = "cv_metadata.json"
 INDEX_NAME = "cv-matching-index"
 
 # Initializare Pinecone
-PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
+PINECONE_API_KEY = st.text_input("Pinecone API Key", type="password")
 if PINECONE_API_KEY:
     pinecone.init(api_key=PINECONE_API_KEY, environment="us-west1-gcp")
     pc_client = pinecone
