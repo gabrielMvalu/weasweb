@@ -2,9 +2,7 @@ import streamlit as st
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain.chains import RetrievalQA
-from langchain_openai import ChatOpenAI
+import pinecone
 import tempfile
 import os
 import pandas as pd
@@ -17,8 +15,13 @@ import json
 st.set_page_config(page_title="CV Matching System", layout="wide")
 
 # Constante
-VECTOR_STORE_PATH = "faiss_index"
 METADATA_PATH = "cv_metadata.json"
+INDEX_NAME = "cv-matching-index"
+
+# Initializare Pinecone
+PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
+if PINECONE_API_KEY:
+    pinecone.init(api_key=PINECONE_API_KEY, environment="us-west1-gcp")
 
 # Functie pentru incarcarea metadata
 def load_metadata():
@@ -34,14 +37,10 @@ def save_metadata(metadata):
 
 # Initializare variabile sesiune
 if 'vector_store' not in st.session_state:
-    if os.path.exists(VECTOR_STORE_PATH):
-        try:
-            st.session_state.vector_store = FAISS.load_local(VECTOR_STORE_PATH, OpenAIEmbeddings())
-            metadata = load_metadata()
-            st.session_state.processed_cvs = metadata['processed_cvs']
-        except Exception as e:
-            st.session_state.vector_store = None
-            st.session_state.processed_cvs = []
+    if INDEX_NAME in pinecone.list_indexes():
+        st.session_state.vector_store = pinecone.Index(INDEX_NAME)
+        metadata = load_metadata()
+        st.session_state.processed_cvs = metadata['processed_cvs']
     else:
         st.session_state.vector_store = None
         st.session_state.processed_cvs = []
@@ -69,11 +68,6 @@ def process_document(file):
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
-def merge_vector_stores(existing_store, new_store):
-    # Merge the indexes
-    existing_store.merge_from(new_store)
-    return existing_store
-
 def create_or_update_vector_store(documents, existing_store=None):
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
@@ -83,34 +77,32 @@ def create_or_update_vector_store(documents, existing_store=None):
     texts = text_splitter.split_documents(documents)
     
     embeddings = OpenAIEmbeddings()
-    new_store = FAISS.from_documents(texts, embeddings)
+    vectors = [embeddings.embed_text(text.content) for text in texts]
     
-    if existing_store:
-        final_store = merge_vector_stores(existing_store, new_store)
-    else:
-        final_store = new_store
+    if INDEX_NAME not in pinecone.list_indexes():
+        pinecone.create_index(INDEX_NAME, dimension=len(vectors[0]))
     
-    # Salvare vector store
-    final_store.save_local(VECTOR_STORE_PATH)
+    index = pinecone.Index(INDEX_NAME)
     
-    return final_store
+    for i, (text, vector) in enumerate(zip(texts, vectors)):
+        metadata = {"source": text.metadata["source"]}
+        index.upsert([(str(i), vector, metadata)])
+    
+    return index
 
 def analyze_job_match(job_description, vector_store):
     embeddings = OpenAIEmbeddings()
     job_embedding = embeddings.embed_query(job_description)
     
-    similar_docs = vector_store.similarity_search_with_score_by_vector(
-        job_embedding,
-        k=10
-    )
+    query_result = vector_store.query(job_embedding, top_k=10, include_metadata=True)
     
     results = []
-    seen_cvs = set()  # Pentru a evita duplicate
+    seen_cvs = set()
     
-    for doc, score in similar_docs:
-        cv_name = doc.metadata['source']
+    for match in query_result.matches:
+        cv_name = match.metadata["source"]
+        similarity_score = match.score
         if cv_name not in seen_cvs:
-            similarity_score = 1 - score
             results.append({
                 'CV': cv_name,
                 'Score': similarity_score
@@ -130,8 +122,8 @@ def main():
         
         # Optiuni pentru resetare si backup
         if st.button("❌ Șterge toate datele"):
-            if os.path.exists(VECTOR_STORE_PATH):
-                shutil.rmtree(VECTOR_STORE_PATH)
+            if INDEX_NAME in pinecone.list_indexes():
+                pinecone.delete_index(INDEX_NAME)
             if os.path.exists(METADATA_PATH):
                 os.remove(METADATA_PATH)
             st.session_state.vector_store = None
@@ -242,52 +234,12 @@ def main():
         with col1:
             st.metric("Total CV-uri procesate", len(st.session_state.processed_cvs))
         with col2:
-            store_size = 0
-            if os.path.exists(VECTOR_STORE_PATH):
-                store_size = sum(os.path.getsize(os.path.join(VECTOR_STORE_PATH, f)) 
-                               for f in os.listdir(VECTOR_STORE_PATH)) / (1024*1024)
-            st.metric("Dimensiune Vector Store", f"{store_size:.2f} MB")
+            store_size = "N/A"  # Pinecone nu are un concept direct de dimensiune a indexului
+            st.metric("Dimensiune Vector Store", store_size)
         
         # Backup/Restore
         st.subheader("💾 Backup & Restore")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("📤 Creează Backup"):
-                if os.path.exists(VECTOR_STORE_PATH):
-                    backup_name = f"backup_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}"
-                    shutil.make_archive(backup_name, 'zip', VECTOR_STORE_PATH)
-                    with open(f"{backup_name}.zip", "rb") as f:
-                        st.download_button(
-                            label="📥 Descarcă Backup",
-                            data=f,
-                            file_name=f"{backup_name}.zip",
-                            mime="application/zip"
-                        )
-        
-        with col2:
-            uploaded_backup = st.file_uploader("📥 Restaurează din Backup", type=['zip'])
-            if uploaded_backup:
-                if st.button("Restaurează"):
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
-                        tmp_file.write(uploaded_backup.getvalue())
-                        backup_path = tmp_file.name
-                    
-                    # Șterge vector store existent
-                    if os.path.exists(VECTOR_STORE_PATH):
-                        shutil.rmtree(VECTOR_STORE_PATH)
-                    
-                    # Extrage backup
-                    shutil.unpack_archive(backup_path, VECTOR_STORE_PATH, 'zip')
-                    os.unlink(backup_path)
-                    
-                    # Reîncarcă vector store
-                    st.session_state.vector_store = FAISS.load_local(
-                        VECTOR_STORE_PATH,
-                        OpenAIEmbeddings()
-                    )
-                    st.success("✅ Backup restaurat cu succes!")
-                    st.experimental_rerun()
+        st.warning("Backup și restaurare nu sunt disponibile pentru Pinecone. Folosiți funcționalități specifice Pinecone pentru a gestiona datele.")
 
 if __name__ == "__main__":
     main()
