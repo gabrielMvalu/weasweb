@@ -6,3 +6,4 @@ numpy
 plotly
 shutilwhich 
 pypdf
+pinecone-client
