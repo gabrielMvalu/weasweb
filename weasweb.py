@@ -21,8 +21,7 @@ INDEX_NAME = "cv-matching-index"
 # Initializare Pinecone
 PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
 if PINECONE_API_KEY:
-    pinecone.init(api_key=PINECONE_API_KEY, environment="us-west1-gcp")
-    pc_client = pinecone
+    pc_client = pinecone.Client(api_key=PINECONE_API_KEY, environment="us-west1-gcp")
 
 # Functie pentru incarcarea metadata
 def load_metadata():
