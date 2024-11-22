@@ -21,7 +21,8 @@ INDEX_NAME = "cv-matching-index"
 # Initializare Pinecone
 PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
 if PINECONE_API_KEY:
-    pc_client = pinecone.Client(api_key=PINECONE_API_KEY, environment="us-west1-gcp")
+    pinecone.init(api_key=PINECONE_API_KEY, environment="us-west1-gcp")
+pc_client = pinecone
 else:
     pc_client = None
 
@@ -79,7 +80,7 @@ def create_or_update_vector_store(documents, existing_store=None):
     texts = text_splitter.split_documents(documents)
     
     embeddings = OpenAIEmbeddings()
-    vectors = [embeddings.embed_text(text.content) for text in texts]
+    vectors = [embeddings.embed_documents([text.content])[0] for text in texts]
     
     if INDEX_NAME not in pc_client.list_indexes():
         pc_client.create_index(INDEX_NAME, dimension=len(vectors[0]))
@@ -94,7 +95,7 @@ def create_or_update_vector_store(documents, existing_store=None):
 
 def analyze_job_match(job_description, vector_store):
     embeddings = OpenAIEmbeddings()
-    job_embedding = embeddings.embed_query(job_description)
+    job_embedding = embeddings.embed_documents([job_description])[0]
     
     query_result = vector_store.query(job_embedding, top_k=10, include_metadata=True)
     
