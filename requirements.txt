@@ -1,9 +1,7 @@
 streamlit
-openai==0.28
+langchain-community
+langchain-openai
 pandas
 numpy
-matplotlib
-scikit-learn
-pdfplumber
-python-docx
-pymongo
+plotly
+shutilwhich 
