@@ -22,6 +22,8 @@ INDEX_NAME = "cv-matching-index"
 PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
 if PINECONE_API_KEY:
     pc_client = pinecone.Client(api_key=PINECONE_API_KEY, environment="us-west1-gcp")
+else:
+    pc_client = None
 
 # Functie pentru incarcarea metadata
 def load_metadata():
@@ -37,7 +39,7 @@ def save_metadata(metadata):
 
 # Initializare variabile sesiune
 if 'vector_store' not in st.session_state:
-    if INDEX_NAME in pc_client.list_indexes():
+    if pc_client and INDEX_NAME in pc_client.list_indexes():
         st.session_state.vector_store = pc_client.Index(INDEX_NAME)
         metadata = load_metadata()
         st.session_state.processed_cvs = metadata['processed_cvs']
@@ -243,3 +245,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
