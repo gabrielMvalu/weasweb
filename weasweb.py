@@ -89,17 +89,17 @@ def create_or_update_vector_store(documents, existing_store=None):
     vectors = [embeddings.embed_documents([text.page_content])[0] for text in texts]
     
     if pc_client is not None:
-        if INDEX_NAME not in pc_client.list_indexes():
-            try:
+        try:
+            if INDEX_NAME not in pc_client.list_indexes():
                 pc_client.create_index(
                     name=INDEX_NAME,
                     dimension=len(vectors[0]),
                     metric='euclidean',
                     spec=pinecone.ServerlessSpec(cloud='aws', region='us-east-1')
                 )
-            except pinecone.PineconeApiException as e:
-                if e.status != 409:  # Index already exists
-                    raise e
+        except pinecone.PineconeApiException as e:
+            if e.status != 409:  # Index already exists
+                raise e
     
     index = pc_client.Index(INDEX_NAME)
     
