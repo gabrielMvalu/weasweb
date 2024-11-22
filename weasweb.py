@@ -2,7 +2,7 @@ import streamlit as st
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
-import pinecone
+from pinecone import Pinecone, ServerlessSpec
 import tempfile
 import os
 import pandas as pd
@@ -20,8 +20,7 @@ INDEX_NAME = "cv-matching-index"
 PINECONE_API_KEY = st.text_input("Pinecone API Key", type="password")
 if PINECONE_API_KEY:
     os.environ['PINECONE_API_KEY'] = PINECONE_API_KEY
-    pinecone.init(api_key=PINECONE_API_KEY, environment="us-east-1")
-    pc_client = pinecone
+    pc_client = Pinecone(api_key=PINECONE_API_KEY)
 else:
     st.error("PINECONE_API_KEY nu este setat!")
     pc_client = None
@@ -40,7 +39,7 @@ def save_metadata(metadata):
 
 # Initializare variabile sesiune
 if 'vector_store' not in st.session_state:
-    if pc_client and INDEX_NAME in pc_client.list_indexes():
+    if pc_client and INDEX_NAME in pc_client.list_indexes().names():
         st.session_state.vector_store = pc_client.Index(INDEX_NAME)
         metadata = load_metadata()
         st.session_state.processed_cvs = metadata['processed_cvs']
@@ -90,12 +89,12 @@ def create_or_update_vector_store(documents, existing_store=None):
     
     if pc_client is not None:
         try:
-            if INDEX_NAME not in pc_client.list_indexes():
+            if INDEX_NAME not in pc_client.list_indexes().names():
                 pc_client.create_index(
                     name=INDEX_NAME,
                     dimension=len(vectors[0]),
                     metric='euclidean',
-                    spec=pinecone.ServerlessSpec(cloud='aws', region='us-east-1')
+                    spec=ServerlessSpec(cloud='aws', region='us-east-1')
                 )
         except pinecone.PineconeApiException as e:
             if e.status != 409:  # Index already exists
