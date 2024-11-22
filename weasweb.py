@@ -94,7 +94,7 @@ def create_or_update_vector_store(documents, existing_store=None):
         name=INDEX_NAME,
         dimension=len(vectors[0]),
         metric='euclidean',
-        spec=pinecone.ServerlessSpec(cloud='aws', region='us-east-1')
+        spec=pinecone.ServerlessSpec(cloud='aws', region='us-west-2')
     )
     
     index = pc_client.Index(INDEX_NAME)
@@ -116,7 +116,7 @@ def analyze_job_match(job_description, vector_store):
     embeddings = OpenAIEmbeddings()
     job_embedding = embeddings.embed_documents([job_description])[0]
     
-    query_result = vector_store.query(job_embedding, top_k=10, include_metadata=True)
+    query_result = vector_store.query(vector=job_embedding, top_k=10, include_metadata=True)
     
     results = []
     seen_cvs = set()
@@ -135,7 +135,8 @@ def analyze_job_match(job_description, vector_store):
 
 def main():
     st.title("🎯 Sistem Avansat de Potrivire CV-uri")
-    
+
+
     with st.sidebar:
         st.header("Configurare")
         api_key = st.text_input("OpenAI API Key", type="password")
