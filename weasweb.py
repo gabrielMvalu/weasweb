@@ -20,7 +20,7 @@ INDEX_NAME = "cv-matching-index"
 PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
 if PINECONE_API_KEY:
     pinecone.init(api_key=PINECONE_API_KEY, environment="us-west1-gcp")
-    pc_client = pinecone.Client()
+    pc_client = pinecone
 else:
     st.error("PINECONE_API_KEY nu este setat în secrets!")
     pc_client = None
@@ -39,8 +39,8 @@ def save_metadata(metadata):
 
 # Initializare variabile sesiune
 if 'vector_store' not in st.session_state:
-    if pc_client and INDEX_NAME in pc_client.list_indexes():
-        st.session_state.vector_store = pc_client.Index(INDEX_NAME)
+    if pc_client and INDEX_NAME in pinecone.list_indexes():
+        st.session_state.vector_store = pinecone.Index(INDEX_NAME)
         metadata = load_metadata()
         st.session_state.processed_cvs = metadata['processed_cvs']
     else:
