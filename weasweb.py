@@ -93,7 +93,7 @@ def create_or_update_vector_store(documents, existing_store=None):
                 pc_client.create_index(
                     name=INDEX_NAME,
                     dimension=len(vectors[0]),
-                    metric='euclidean',
+                    metric='cosine',
                     spec=ServerlessSpec(cloud='aws', region='us-east-1')
                 )
         except pinecone.PineconeApiException as e:
